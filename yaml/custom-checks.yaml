@@ -1,0 +1,131 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trivy-operator-policies-config
+  namespace: trivy-system
+  labels:
+    app.kubernetes.io/name: trivy-operator
+    app.kubernetes.io/instance: trivy-operator
+  
+data:
+  policy.no_privileged_containers.kinds: "*"
+  policy.no_privileged_containers.rego: |
+    package trivyoperator.policy.k8s.no_privileged_containers
+
+    import future.keywords.in
+
+    __rego_metadata__ := {
+        "id": "no_privileged_containers",
+        "title": "Privileged Container Restriction",
+        "severity": "HIGH",
+        "type": "Kubernetes Security Check",
+        "description": "Containers should not be run with privileged mode enabled as it grants excessive permissions.",
+        "recommended_actions": "Ensure that containers run without the 'privileged' flag enabled.",
+        "url": "https://kubernetes.io/docs/concepts/security/pod-security-standards/",
+    }
+
+    deny[res] {
+        input.kind == "Pod"
+        some container in input.spec.containers
+        container.securityContext.privileged == true
+        msg := sprintf("Container '%v' runs as privileged, which is not allowed.", [container.name])
+        res := { "msg": msg, "metadata": container }
+    }
+
+  policy.enforce_image_pull_policy.kinds: "*"
+  policy.enforce_image_pull_policy.rego: |
+    package trivyoperator.policy.k8s.enforce_image_pull_policy
+
+    import future.keywords.in
+
+    __rego_metadata__ := {
+        "id": "enforce_image_pull_policy",
+        "title": "Enforce Image Pull Policy",
+        "severity": "MEDIUM",
+        "type": "Kubernetes Security Check",
+        "description": "Containers should have their imagePullPolicy set to 'Always' to ensure they use the latest images.",
+        "recommended_actions": "Set 'imagePullPolicy' to 'Always' for all containers.",
+        "url": "https://kubernetes.io/docs/concepts/containers/images/#updating-images",
+    }
+
+    deny[res] {
+        input.kind == "Pod"
+        some container in input.spec.containers
+        not container.imagePullPolicy == "Always"
+        msg := sprintf("Container '%v' does not have 'imagePullPolicy: Always'.", [container.name])
+        res := { "msg": msg, "metadata": container }
+    }
+
+  policy.no_root_user.kinds: "*"
+  policy.no_root_user.rego: |
+    package trivyoperator.policy.k8s.no_root_user
+
+    import future.keywords.in
+
+    __rego_metadata__ := {
+        "id": "no_root_user",
+        "title": "Restrict Root User",
+        "severity": "HIGH",
+        "type": "Kubernetes Security Check",
+        "description": "Containers should not be run as the root user to minimize security risks.",
+        "recommended_actions": "Ensure containers run as a non-root user.",
+        "url": "https://kubernetes.io/docs/concepts/security/pod-security-standards/",
+    }
+
+    deny[res] {
+        input.kind == "Pod"
+        some container in input.spec.containers
+        container.securityContext.runAsUser == 0
+        msg := sprintf("Container '%v' is running as root, which is not allowed.", [container.name])
+        res := { "msg": msg, "metadata": container }
+    }
+
+  policy.host_path_restriction.kinds: "*"
+  policy.host_path_restriction.rego: |
+    package trivyoperator.policy.k8s.host_path_restriction
+
+    import future.keywords.in
+
+    __rego_metadata__ := {
+        "id": "host_path_restriction",
+        "title": "Restrict HostPath Usage",
+        "severity": "HIGH",
+        "type": "Kubernetes Security Check",
+        "description": "Pods should not mount hostPath volumes to prevent host filesystem tampering.",
+        "recommended_actions": "Avoid using hostPath volumes. Use PVCs instead.",
+        "url": "https://kubernetes.io/docs/concepts/storage/volumes/#hostpath",
+    }
+
+    deny[res] {
+        input.kind == "Pod"
+        some volume in input.spec.volumes
+        volume.hostPath
+        msg := sprintf("Pod '%v' is using a hostPath volume, which is not allowed.", [input.metadata.name])
+        res := { "msg": msg, "metadata": volume }
+    }
+
+  policy.no_cap_sys_admin.kinds: "*"
+  policy.no_cap_sys_admin.rego: |
+    package trivyoperator.policy.k8s.no_cap_sys_admin
+
+    import future.keywords.in
+
+    __rego_metadata__ := {
+        "id": "no_cap_sys_admin",
+        "title": "Restrict CAP_SYS_ADMIN Capability",
+        "severity": "HIGH",
+        "type": "Kubernetes Security Check",
+        "description": "Containers should not have the CAP_SYS_ADMIN capability as it grants excessive privileges.",
+        "recommended_actions": "Remove CAP_SYS_ADMIN from container securityContext capabilities.",
+        "url": "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
+    }
+
+    deny[res] {
+        input.kind == "Pod"
+        some container in input.spec.containers
+        some capability in container.securityContext.capabilities.add
+        capability == "SYS_ADMIN"
+        msg := sprintf("Container '%v' has CAP_SYS_ADMIN capability, which is not allowed.", [container.name])
+        res := { "msg": msg, "metadata": container }
+    }
+
