@@ -101,7 +101,7 @@ containers=(
 
 container_names=()
 for img in "${containers[@]}"; do
-    container_names+=("$(echo "$img" | tr ':/' '-')")
+    container_names+=("$(echo "$img" | tr ':/.' '-' )")
 done
 
 # Default values
